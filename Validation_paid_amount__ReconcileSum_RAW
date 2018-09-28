@@ -1,0 +1,57 @@
+SELECT 
+'Paid_Amount - Difference between Base SUM and/or Prep SUM and/or Report SUM detected' as msg
+FROM
+
+(SELECT CASE WHEN 
+      ROUND(st/cnt,1) <> ROUND(divr,0) THEN 1 ELSE NULL END AS check
+      FROM
+      (
+
+            SELECT
+              SUM(total) AS st
+            , COUNT(*)   AS cnt
+            , MAX(total) AS divr
+            FROM
+            ( -- if we remove or add lines in here then the check remains dynamic - precision to the nearest £0.05
+              
+              SELECT ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_payment_actions_with_states` where payment_actions_to_state='paid' -- pre payment actions prep
+              UNION ALL
+              
+              SELECT ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_payment_actions_prep` WHERE to_state='paid' -- pre payment prep
+              UNION ALL
+              
+              SELECT ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_kpi_payment_prep` -- payment prep
+              UNION ALL
+              
+              SELECT
+              ROUND(sum(amount),0) as paid_amount_base -- base - This is the defacto truth that we are comparing everything else against 
+              FROM
+                (
+                  SELECT 
+                    payment_id
+                  , amount
+                  FROM 
+                  `{{ params.gbq_project_id }}.{{ params.gbq_dataset_raw_data_deduplicated }}.payments` p 
+                  JOIN 
+                  `{{ params.gbq_project_id }}.{{ params.gbq_dataset_raw_data_deduplicated }}.payment_actions` pa 
+                  on p.id=pa.payment_id 
+                  WHERE to_state ='paid' group by
+                    payment_id
+                  , amount
+                )
+               UNION ALL
+              
+               SELECT ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_by_partner_prep` -- output -2
+                UNION ALL
+              
+               SELECT ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_by_partner_pre` -- output -1
+                UNION ALL
+              
+               SELECT ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_by_partner` -- output
+            )
+      ) 
+) reconcile
+JOIN
+(SELECT 1 AS joinr) errors
+ON
+reconcile.check = errors.joinr
