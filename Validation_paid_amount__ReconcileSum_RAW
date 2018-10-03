@@ -13,18 +13,17 @@ FROM
             , MAX(total) AS divr
             FROM
             ( -- if we remove or add lines in here then the check remains dynamic - precision to the nearest £0.05
-              
-              SELECT ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_payment_actions_with_states` where payment_actions_to_state='paid' -- pre payment actions prep
+              SELECT 'pre payment prep' as label, ROUND(SUM(Paid_amount),0) AS total FROM `gc-data-infrastructure-7e07.experimental_tables.vw_payment_actions_prep_BPS` WHERE to_state='paid' -- pre payment prep
               UNION ALL
               
-              SELECT ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_payment_actions_prep` WHERE to_state='paid' -- pre payment prep
+              SELECT 'post payment actions prep' as label, ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_payment_actions_with_states_BPS` where payment_actions_to_state='paid' -- post payment actions prep
               UNION ALL
               
-              SELECT ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_kpi_payment_prep` -- payment prep
+              SELECT 'payment prep' as label, ROUND(SUM(Paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_kpi_payment_prep_BPS` -- payment prep
               UNION ALL
               
               SELECT
-              ROUND(sum(amount),0) as paid_amount_base -- base - This is the defacto truth that we are comparing everything else against 
+              'defacto base sum' as label, ROUND(sum(amount),0) as paid_amount_base -- base - This is the defacto truth that we are comparing everything else against 
               FROM
                 (
                   SELECT 
@@ -39,15 +38,15 @@ FROM
                     payment_id
                   , amount
                 )
-               UNION ALL
+              UNION ALL
+             
+              SELECT 'output -2' as label, ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_prep_BPS` -- output -2
+              UNION ALL
               
-               SELECT ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_by_partner_prep` -- output -2
-                UNION ALL
+              SELECT 'output -1' as label, ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_pre_BPS` -- output -1
+              UNION ALL
               
-               SELECT ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_by_partner_pre` -- output -1
-                UNION ALL
-              
-               SELECT ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_by_partner` -- output
+              SELECT 'output Final' as label, ROUND(SUM(paid_amount),0) AS total FROM `{{ params.gbq_project_id }}.{{ params.gbq_dataset_materialized_views }}.vw_growth_kpi_data_BPS` -- output
             )
       ) 
 ) reconcile
